@@ -34,50 +34,46 @@ from model_architecture import EncoderCNN, DecoderWithAttention, Vocabulary
 st.set_page_config(page_title="Neural Storyteller v2", layout="wide", page_icon="🤖")
 
 # --- HUGGING FACE DOWNLOAD LINKS ---
+from huggingface_hub import hf_hub_download
+
+# --- CONFIG ---
 HF_REPO = "shahbazahmad/image-caption-attention-model"
-ENCODER_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/encoder_att_v2_epoch_40.pth"
-DECODER_URL = f"https://huggingface.co/{HF_REPO}/resolve/main/decoder_att_v2_epoch_40.pth"
-VOCAB_URL   = f"https://huggingface.co/{HF_REPO}/resolve/main/vocab.pkl"
-
-def download_file(url, filename):
-    if not os.path.exists(filename):
-        try:
-            with st.spinner(f'Downloading {filename} from Hugging Face...'):
-                urllib.request.urlretrieve(url, filename)
-        except Exception as e:
-            st.error(f"Error downloading {filename}: {e}")
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 @st.cache_resource
 def load_assets():
-    # 1. Ensure files are present locally on the Streamlit server
-    download_file(VOCAB_URL, 'vocab.pkl')
-    download_file(ENCODER_URL, 'encoder_att_v2_epoch_40.pth')
-    download_file(DECODER_URL, 'decoder_att_v2_epoch_40.pth')
+    try:
+        # Use the official HF library to download and cache the files
+        # This is MUCH safer than urllib
+        vocab_path = hf_hub_download(repo_id=HF_REPO, filename="vocab.pkl")
+        encoder_path = hf_hub_download(repo_id=HF_REPO, filename="encoder_att_v2_epoch_40.pth")
+        decoder_path = hf_hub_download(repo_id=HF_REPO, filename="decoder_att_v2_epoch_40.pth")
 
-    # 2. Load Vocab
-    with open('vocab.pkl', 'rb') as f:
-        vocab = pickle.load(f)
-    
-    # 3. Load Encoder
-    encoder = EncoderCNN().to(device)
-    encoder.load_state_dict(torch.load('encoder_att_v2_epoch_40.pth', map_location=device))
-    encoder.eval()
-    
-    # 4. Load Decoder
-    decoder = DecoderWithAttention(
-        attention_dim=256, 
-        embed_size=256, 
-        decoder_dim=256, 
-        vocab_size=len(vocab)
-    ).to(device)
-    decoder.load_state_dict(torch.load('decoder_att_v2_epoch_40.pth', map_location=device))
-    decoder.eval()
-    
-    return vocab, encoder, decoder
+        # Load Vocab
+        with open(vocab_path, 'rb') as f:
+            vocab = pickle.load(f)
+        
+        # Load Encoder
+        encoder = EncoderCNN().to(device)
+        encoder.load_state_dict(torch.load(encoder_path, map_location=device))
+        encoder.eval()
+        
+        # Load Decoder
+        decoder = DecoderWithAttention(
+            attention_dim=256, 
+            embed_size=256, 
+            decoder_dim=256, 
+            vocab_size=len(vocab)
+        ).to(device)
+        decoder.load_state_dict(torch.load(decoder_path, map_location=device))
+        decoder.eval()
+        
+        return vocab, encoder, decoder
+        
+    except Exception as e:
+        st.error(f"Error loading model from Hugging Face: {e}")
+        st.stop()
 
-# Load the brain
+# Initialize
 vocab, encoder, decoder = load_assets()
 
 # ... [The rest of your app.py prediction and UI code stays the same] ...
@@ -159,4 +155,5 @@ with col2:
         st.write("Waiting for image upload...")
 
 st.markdown("---")
+
 st.caption("University Project | Developed by Shahbaz | Powered by PyTorch & Streamlit")
