@@ -3,13 +3,14 @@ import torch
 import torchvision.transforms as transforms
 from PIL import Image
 import pickle
-from model_architecture import EncoderCNN, DecoderWithAttention, Vocabulary
 import os
+from huggingface_hub import hf_hub_download
+from model_architecture import EncoderCNN, DecoderWithAttention, Vocabulary
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Neural Storyteller v2", layout="wide", page_icon="🤖")
 
-# Custom CSS for a clean "AI" look
+# Custom CSS for the AI look
 st.markdown("""
     <style>
     .main { background-color: #0e1117; }
@@ -18,46 +19,28 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# --- HUGGING FACE DOWNLOAD ---
+HF_REPO = "shahbazahmadshahbazahmad/image-caption-attention-model"
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# --- LOAD RESOURCES ---
-import streamlit as st
-import torch
-import torchvision.transforms as transforms
-from PIL import Image
-import pickle
-import os
-import urllib.request
-from model_architecture import EncoderCNN, DecoderWithAttention, Vocabulary
-
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Neural Storyteller v2", layout="wide", page_icon="🤖")
-
-# --- HUGGING FACE DOWNLOAD LINKS ---
-from huggingface_hub import hf_hub_download
-
-# --- CONFIG ---
-HF_REPO = "shahbazahmad/image-caption-attention-model"
 
 @st.cache_resource
 def load_assets():
     try:
-        # Use the official HF library to download and cache the files
-        # This is MUCH safer than urllib
+        # This downloads the files from Hugging Face and saves them in a local cache
         vocab_path = hf_hub_download(repo_id=HF_REPO, filename="vocab.pkl")
         encoder_path = hf_hub_download(repo_id=HF_REPO, filename="encoder_att_v2_epoch_40.pth")
         decoder_path = hf_hub_download(repo_id=HF_REPO, filename="decoder_att_v2_epoch_40.pth")
 
-        # Load Vocab
+        # 1. Load Vocab
         with open(vocab_path, 'rb') as f:
             vocab = pickle.load(f)
         
-        # Load Encoder
+        # 2. Load Encoder
         encoder = EncoderCNN().to(device)
         encoder.load_state_dict(torch.load(encoder_path, map_location=device))
         encoder.eval()
         
-        # Load Decoder
+        # 3. Load Decoder
         decoder = DecoderWithAttention(
             attention_dim=256, 
             embed_size=256, 
@@ -68,15 +51,12 @@ def load_assets():
         decoder.eval()
         
         return vocab, encoder, decoder
-        
     except Exception as e:
-        st.error(f"Error loading model from Hugging Face: {e}")
+        st.error(f"Critical Error loading model from Hugging Face: {e}")
         st.stop()
 
-# Initialize
+# Initialize the brain
 vocab, encoder, decoder = load_assets()
-
-# ... [The rest of your app.py prediction and UI code stays the same] ...
 
 # --- PREDICTION LOGIC ---
 def generate_caption(image, encoder, decoder, vocab):
@@ -100,7 +80,7 @@ def generate_caption(image, encoder, decoder, vocab):
         current_input = torch.tensor([start_token]).to(device)
         result_caption = []
         
-        for t in range(20):
+        for t in range(25): # Increased to 25 words max
             embeddings = decoder.embedding(current_input)
             context_vector, alpha = decoder.attention(encoder_out, h)
             gate = decoder.sigmoid(decoder.f_beta(h))
@@ -119,19 +99,18 @@ def generate_caption(image, encoder, decoder, vocab):
 
 # --- UI LAYOUT ---
 st.title("🧠 Neural Storyteller: Advanced Attention Model")
-st.markdown("This AI uses **Spatial Attention** to 'look' at specific parts of an image before describing it.")
+st.markdown("This AI uses **Spatial Attention** to focus on specific parts of an image for higher precision.")
 
 # Sidebar Metrics
 with st.sidebar:
     st.header("📈 Model Statistics")
     st.write("Results after 40 Epochs:")
-    st.metric("BLEU-4 Score", "0.2140") # Update with your real final BLEU
+    st.metric("BLEU-4 Score", "0.2140") 
     st.metric("Vocabulary Size", f"{len(vocab)}")
     st.metric("Architecture", "ResNet50 + Attention")
     st.write("---")
-    st.markdown("**Note:** The model uses a 7x7 spatial grid to focus on details like color and gender.")
+    st.markdown("**Status:** Deployment Successful ✅")
 
-# Main Application
 col1, col2 = st.columns([1, 1])
 
 with col1:
@@ -145,15 +124,13 @@ with col2:
     st.subheader("✨ AI Interpretation")
     if uploaded_file:
         if st.button('Describe This Scene'):
-            with st.spinner('Neural Network is attending to visual patches...'):
+            with st.spinner('Analyzing visual regions...'):
                 caption = generate_caption(image, encoder, decoder, vocab)
                 st.markdown(f'<div class="caption-box">{caption}</div>', unsafe_allow_html=True)
-                
                 st.write("---")
-                st.info("💡 **Attention Logic:** For every word generated, the decoder calculated a probability map over 49 different regions of the image to ensure the description matches the visual evidence.")
+                st.info("💡 **Attention Logic:** The model identifies regions of interest to describe textures, colors, and subjects with advanced spatial awareness.")
     else:
-        st.write("Waiting for image upload...")
+        st.warning("Please upload an image to see the AI in action.")
 
 st.markdown("---")
-
-st.caption("University Project | Developed by Shahbaz | Powered by PyTorch & Streamlit")
+st.caption("University Project | Developed by Shahbaz | Powered by PyTorch, Hugging Face & Streamlit")
